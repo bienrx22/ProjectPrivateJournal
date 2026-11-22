@@ -50,7 +50,8 @@ async function MusicPageContent({ params }: { params: Params }) {
   ]);
 
   const isVideo = media.media_type === "VIDEO";
-  const defaultLengthMs = isVideo && media.duration_ms ? media.duration_ms : DEFAULT_SEGMENT_MS;
+  // The song isn't tied to the video's length: a shorter video simply loops under the music.
+  const defaultLengthMs = DEFAULT_SEGMENT_MS;
 
   return (
     <>
@@ -78,7 +79,8 @@ async function MusicPageContent({ params }: { params: Params }) {
           </div>
           {isVideo && media.duration_ms && (
             <p className="mt-2 text-xs text-muted-foreground">
-              The video is {Math.round(media.duration_ms / 1000)}s long, so new segments default to that length.
+              This video is {Math.round(media.duration_ms / 1000)}s long. If the song segment is longer, the video
+              loops (muted) until the song segment ends and starts over.
             </p>
           )}
         </div>
