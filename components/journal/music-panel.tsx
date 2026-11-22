@@ -8,7 +8,7 @@ import { activeLineIndex } from "@/lib/lyrics";
 import type { ViewerTrack } from "@/lib/media";
 
 /** Channel photo for YouTube tracks; the butter-yellow note otherwise (or if the photo fails). */
-function TrackArtwork({ url }: { url: string | null }) {
+function TrackArtwork({ url, playing }: { url: string | null; playing: boolean }) {
   const [failed, setFailed] = useState(false);
   if (url && !failed) {
     return (
@@ -18,7 +18,9 @@ function TrackArtwork({ url }: { url: string | null }) {
         alt=""
         referrerPolicy="no-referrer"
         onError={() => setFailed(true)}
-        className="h-11 w-11 shrink-0 rounded-full object-cover ring-2 ring-butter/70"
+        // Spins like a record while playing; pausing freezes it at its current angle.
+        className="h-11 w-11 shrink-0 animate-[spin_6s_linear_infinite] rounded-full object-cover ring-2 ring-butter/70 motion-reduce:animate-none"
+        style={{ animationPlayState: playing ? "running" : "paused" }}
       />
     );
   }
@@ -141,7 +143,7 @@ export function MusicPanel({
       )}
 
       <div className="flex items-start gap-3">
-        <TrackArtwork url={track.artworkUrl} />
+        <TrackArtwork url={track.artworkUrl} playing={playing} />
         <div className="min-w-0">
           <p className="truncate font-serif text-xl leading-tight">{track.title}</p>
           {track.artist && <p className="truncate text-sm text-white/60">{track.artist}</p>}
