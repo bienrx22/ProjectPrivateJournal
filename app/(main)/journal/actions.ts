@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { DATE_RE } from "@/lib/journal";
+import { MEDIA_BUCKET } from "@/lib/media";
 
 export type EntryFormState = {
   error?: string;
@@ -86,8 +87,20 @@ export async function updateEntry(
 
 export async function deleteEntry(id: string) {
   const supabase = await authedClient();
+
+  // Rows cascade in the database; storage files don't, so collect their paths first.
+  const { data: media } = await supabase
+    .from("media_assets")
+    .select("file_path, thumbnail_path")
+    .eq("entry_id", id);
+  const paths = (media ?? [])
+    .flatMap((m) => [m.file_path, m.thumbnail_path])
+    .filter((p): p is string => Boolean(p));
+
   const { error } = await supabase.from("journal_entries").delete().eq("id", id);
   if (error) throw new Error(error.message);
+
+  if (paths.length) await supabase.storage.from(MEDIA_BUCKET).remove(paths);
 
   revalidatePath("/", "layout");
   redirect("/dashboard");

@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
-import { ArrowLeft, ImageIcon, MapPin, Pencil } from "lucide-react";
+import { ArrowLeft, MapPin, Pencil } from "lucide-react";
+import { MediaGrid } from "@/components/journal/media-grid";
+import { MediaUploader } from "@/components/journal/media-uploader";
+import { MEDIA_BUCKET, type MediaItem } from "@/lib/media";
 import { Button } from "@/components/ui/button";
 import { FavoriteButton } from "@/components/journal/favorite-button";
 import { DeleteEntryButton } from "@/components/journal/delete-entry-button";
@@ -86,10 +89,47 @@ async function EntryDetail({ params }: { params: Params }) {
         <p className="mt-8 italic text-muted-foreground">No description.</p>
       )}
 
-      <div className="mt-10 flex flex-col items-center gap-2 rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
-        <ImageIcon className="h-6 w-6" />
-        Photos and videos for this memory will appear here.
-      </div>
+      <section className="mt-10 flex flex-col gap-4" aria-label="Photos and videos">
+        <Suspense fallback={<div className="h-40 animate-pulse rounded-xl bg-muted/60" />}>
+          <EntryMedia entryId={entry.id} />
+        </Suspense>
+      </section>
+    </>
+  );
+}
+
+const SIGNED_URL_TTL_SECONDS = 60 * 60;
+
+async function EntryMedia({ entryId }: { entryId: string }) {
+  const supabase = await createClient();
+  const { data: claims } = await supabase.auth.getClaims();
+  const userId = claims?.claims.sub as string;
+
+  const { data: rows, error } = await supabase
+    .from("media_assets")
+    .select("id, file_path, media_type")
+    .eq("entry_id", entryId)
+    .order("sort_order")
+    .order("created_at");
+  if (error) throw new Error(error.message);
+
+  let items: MediaItem[] = [];
+  if (rows.length) {
+    const { data: signed, error: signError } = await supabase.storage
+      .from(MEDIA_BUCKET)
+      .createSignedUrls(rows.map((r) => r.file_path), SIGNED_URL_TTL_SECONDS);
+    if (signError) throw new Error(signError.message);
+    const urlByPath = new Map(signed.map((s) => [s.path, s.signedUrl]));
+    items = rows.flatMap((r) => {
+      const url = urlByPath.get(r.file_path);
+      return url ? [{ id: r.id, url, mediaType: r.media_type as MediaItem["mediaType"] }] : [];
+    });
+  }
+
+  return (
+    <>
+      {items.length > 0 && <MediaGrid entryId={entryId} items={items} />}
+      <MediaUploader entryId={entryId} userId={userId} />
     </>
   );
 }
