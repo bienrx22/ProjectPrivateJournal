@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { DATE_RE } from "@/lib/journal";
 import { MEDIA_BUCKET } from "@/lib/media";
+import { AUDIO_BUCKET } from "@/lib/music";
 
 export type EntryFormState = {
   error?: string;
@@ -91,16 +92,23 @@ export async function deleteEntry(id: string): Promise<{ error?: string }> {
   // Rows cascade in the database; storage files don't, so collect their paths first.
   const { data: media } = await supabase
     .from("media_assets")
-    .select("file_path, thumbnail_path")
+    .select("id, file_path, thumbnail_path")
     .eq("entry_id", id);
   const paths = (media ?? [])
     .flatMap((m) => [m.file_path, m.thumbnail_path])
     .filter((p): p is string => Boolean(p));
 
+  const mediaIds = (media ?? []).map((m) => m.id);
+  const { data: tracks } = mediaIds.length
+    ? await supabase.from("music_tracks").select("storage_path").in("media_asset_id", mediaIds)
+    : { data: [] };
+  const audioPaths = (tracks ?? []).map((t) => t.storage_path).filter((p): p is string => Boolean(p));
+
   const { error } = await supabase.from("journal_entries").delete().eq("id", id);
   if (error) return { error: error.message };
 
   if (paths.length) await supabase.storage.from(MEDIA_BUCKET).remove(paths);
+  if (audioPaths.length) await supabase.storage.from(AUDIO_BUCKET).remove(audioPaths);
 
   revalidatePath("/", "layout");
   redirect("/dashboard");

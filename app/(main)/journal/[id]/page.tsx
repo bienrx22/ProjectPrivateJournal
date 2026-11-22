@@ -107,7 +107,7 @@ async function EntryMedia({ entryId }: { entryId: string }) {
 
   const { data: rows, error } = await supabase
     .from("media_assets")
-    .select("id, file_path, media_type")
+    .select("id, file_path, media_type, music_tracks(id)")
     .eq("entry_id", entryId)
     .order("sort_order")
     .order("created_at");
@@ -122,7 +122,9 @@ async function EntryMedia({ entryId }: { entryId: string }) {
     const urlByPath = new Map(signed.map((s) => [s.path, s.signedUrl]));
     items = rows.flatMap((r) => {
       const url = urlByPath.get(r.file_path);
-      return url ? [{ id: r.id, url, mediaType: r.media_type as MediaItem["mediaType"] }] : [];
+      const track = r.music_tracks as unknown;
+      const hasTrack = Array.isArray(track) ? track.length > 0 : Boolean(track);
+      return url ? [{ id: r.id, url, mediaType: r.media_type as MediaItem["mediaType"], hasTrack }] : [];
     });
   }
 

@@ -1,7 +1,8 @@
 "use client";
 
 import { useOptimistic, useState, useTransition } from "react";
-import { ChevronLeft, ChevronRight, Play, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { ChevronLeft, ChevronRight, Music2, Play, Trash2 } from "lucide-react";
 import { deleteMedia, setMediaOrder } from "@/app/(main)/journal/media-actions";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { MediaLightbox } from "@/components/journal/media-lightbox";
@@ -105,6 +106,18 @@ export function MediaGrid({ entryId, items }: { entryId: string; items: MediaIte
                   <ChevronRight className="h-4 w-4" />
                 </button>
             </div>
+            <Link
+              href={`/journal/${entryId}/media/${m.id}/music`}
+              aria-label={m.hasTrack ? "Edit music" : "Add music"}
+              title={m.hasTrack ? "Edit music" : "Add music"}
+              className={
+                m.hasTrack
+                  ? "absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-butter text-foreground shadow transition hover:scale-105"
+                  : `${controlClass} absolute right-2 top-2 ${revealClass}`
+              }
+            >
+              <Music2 className="h-4 w-4" />
+            </Link>
             <button
               type="button"
               className={`${controlClass} absolute bottom-2 right-2 ${revealClass}`}

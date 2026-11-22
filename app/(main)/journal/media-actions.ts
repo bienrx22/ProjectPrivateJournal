@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { MAX_MEDIA_BYTES, MEDIA_BUCKET, mediaTypeFor } from "@/lib/media";
 import { UUID_RE } from "@/lib/journal";
+import { AUDIO_BUCKET } from "@/lib/music";
 
 export type MediaActionResult = { error?: string };
 
@@ -66,6 +67,13 @@ export async function addMedia(entryId: string, item: NewMedia): Promise<MediaAc
 export async function deleteMedia(mediaId: string): Promise<MediaActionResult> {
   const { supabase } = await authed();
 
+  // The track row cascades; its audio file doesn't, so grab the path first.
+  const { data: track } = await supabase
+    .from("music_tracks")
+    .select("storage_path")
+    .eq("media_asset_id", mediaId)
+    .maybeSingle();
+
   const { data: media, error } = await supabase
     .from("media_assets")
     .delete()
@@ -77,6 +85,7 @@ export async function deleteMedia(mediaId: string): Promise<MediaActionResult> {
 
   const paths = [media.file_path, media.thumbnail_path].filter((p): p is string => Boolean(p));
   await supabase.storage.from(MEDIA_BUCKET).remove(paths);
+  if (track?.storage_path) await supabase.storage.from(AUDIO_BUCKET).remove([track.storage_path]);
 
   revalidatePath(`/journal/${media.entry_id}`);
   return {};

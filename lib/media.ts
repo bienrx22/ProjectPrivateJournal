@@ -24,4 +24,5 @@ export type MediaItem = {
   id: string;
   url: string;
   mediaType: MediaType;
+  hasTrack: boolean;
 };
