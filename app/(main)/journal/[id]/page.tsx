@@ -6,6 +6,7 @@ import { MediaGrid } from "@/components/journal/media-grid";
 import { MediaUploader } from "@/components/journal/media-uploader";
 import { MEDIA_BUCKET, toViewerTrack, type MediaCaption, type MediaItem } from "@/lib/media";
 import { AUDIO_BUCKET, type Track } from "@/lib/music";
+import { channelAvatarOrNull } from "@/lib/youtube-search";
 import { Button } from "@/components/ui/button";
 import { FavoriteButton } from "@/components/journal/favorite-button";
 import { DeleteEntryButton } from "@/components/journal/delete-entry-button";
@@ -123,6 +124,19 @@ async function EntryMedia({ entryId, caption }: { entryId: string; caption: Medi
     const t = r.music_tracks as unknown as TrackWithLyrics | TrackWithLyrics[] | null;
     return (Array.isArray(t) ? t[0] : t) ?? null;
   };
+
+  // One-time backfill: YouTube tracks saved before artwork existed get their channel photo now.
+  const missingArtwork = rows
+    .map(trackOf)
+    .filter((t): t is TrackWithLyrics => t?.source === "youtube" && !t.artwork_url && Boolean(t.youtube_video_id));
+  await Promise.all(
+    missingArtwork.map(async (t) => {
+      const url = await channelAvatarOrNull(t.youtube_video_id!);
+      if (!url) return;
+      t.artwork_url = url;
+      await supabase.from("music_tracks").update({ artwork_url: url }).eq("id", t.id);
+    }),
+  );
 
   let items: MediaItem[] = [];
   if (rows.length) {

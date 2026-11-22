@@ -6,7 +6,12 @@ import { createClient } from "@/lib/supabase/server";
 import { UUID_RE } from "@/lib/journal";
 import { AUDIO_BUCKET } from "@/lib/music";
 import { YOUTUBE_ID_RE } from "@/lib/youtube";
-import { searchSongs, youTubeSearchConfigured, type SongResult } from "@/lib/youtube-search";
+import {
+  channelAvatarOrNull,
+  searchSongs,
+  youTubeSearchConfigured,
+  type SongResult,
+} from "@/lib/youtube-search";
 
 export type MusicActionResult = { error?: string };
 
@@ -65,11 +70,21 @@ export async function saveTrack(mediaId: string, input: TrackInput): Promise<Mus
 
   const { data: previous } = await supabase
     .from("music_tracks")
-    .select("storage_path")
+    .select("storage_path, youtube_video_id, artwork_url")
     .eq("media_asset_id", mediaId)
     .maybeSingle();
 
   const isUpload = input.source === "upload";
+
+  // YouTube: the channel's profile photo goes on the music icon. Reuse it if the video didn't change.
+  let artworkUrl: string | null = null;
+  if (!isUpload && input.youtubeVideoId) {
+    artworkUrl =
+      previous?.youtube_video_id === input.youtubeVideoId && previous.artwork_url
+        ? previous.artwork_url
+        : await channelAvatarOrNull(input.youtubeVideoId);
+  }
+
   const { error } = await supabase.from("music_tracks").upsert(
     {
       media_asset_id: mediaId,
@@ -81,6 +96,7 @@ export async function saveTrack(mediaId: string, input: TrackInput): Promise<Mus
       start_ms: input.startMs,
       end_ms: input.endMs,
       volume: Math.round(input.volume * 100) / 100,
+      artwork_url: artworkUrl,
     },
     { onConflict: "media_asset_id" },
   );

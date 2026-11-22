@@ -7,6 +7,28 @@ import { formatClock } from "@/lib/music";
 import { activeLineIndex } from "@/lib/lyrics";
 import type { ViewerTrack } from "@/lib/media";
 
+/** Channel photo for YouTube tracks; the butter-yellow note otherwise (or if the photo fails). */
+function TrackArtwork({ url }: { url: string | null }) {
+  const [failed, setFailed] = useState(false);
+  if (url && !failed) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={url}
+        alt=""
+        referrerPolicy="no-referrer"
+        onError={() => setFailed(true)}
+        className="h-11 w-11 shrink-0 rounded-full object-cover ring-2 ring-butter/70"
+      />
+    );
+  }
+  return (
+    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-butter text-[#3a2c25]">
+      <Music2 className="h-5 w-5" />
+    </span>
+  );
+}
+
 /**
  * Right-hand "Music Details" panel of the viewer. Plays the track's segment on a loop.
  * Remount (key) per media item so each item starts fresh.
@@ -119,9 +141,7 @@ export function MusicPanel({
       )}
 
       <div className="flex items-start gap-3">
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-butter text-[#3a2c25]">
-          <Music2 className="h-5 w-5" />
-        </span>
+        <TrackArtwork url={track.artworkUrl} />
         <div className="min-w-0">
           <p className="truncate font-serif text-xl leading-tight">{track.title}</p>
           {track.artist && <p className="truncate text-sm text-white/60">{track.artist}</p>}

@@ -46,6 +46,44 @@ type VideosResponse = {
   items?: { id: string; contentDetails?: { duration?: string } }[];
 };
 
+type SnippetResponse = {
+  items?: { snippet?: { channelId?: string; thumbnails?: Record<string, { url: string }> } }[];
+  error?: { message: string };
+};
+
+/**
+ * Profile photo of the channel that uploaded `videoId` (2 quota units).
+ * Throws on API errors so failures aren't cached; returns null if the video/channel has none.
+ */
+export async function fetchChannelAvatar(videoId: string): Promise<string | null> {
+  "use cache";
+  cacheLife("days");
+
+  const key = process.env.YOUTUBE_API_KEY!;
+  const vres = await fetch(`${API}/videos?${new URLSearchParams({ part: "snippet", id: videoId, key })}`);
+  const vdata = (await vres.json()) as SnippetResponse;
+  if (!vres.ok) throw new Error(vdata.error?.message ?? "YouTube lookup failed.");
+  const channelId = vdata.items?.[0]?.snippet?.channelId;
+  if (!channelId) return null;
+
+  const cres = await fetch(`${API}/channels?${new URLSearchParams({ part: "snippet", id: channelId, key })}`);
+  const cdata = (await cres.json()) as SnippetResponse;
+  if (!cres.ok) throw new Error(cdata.error?.message ?? "YouTube lookup failed.");
+  const t = cdata.items?.[0]?.snippet?.thumbnails;
+  const url = (t?.medium ?? t?.high ?? t?.default)?.url ?? null;
+  return url?.startsWith("https://") ? url : null;
+}
+
+/** Same as fetchChannelAvatar, but never throws (null when unavailable or not configured). */
+export async function channelAvatarOrNull(videoId: string): Promise<string | null> {
+  if (!youTubeSearchConfigured()) return null;
+  try {
+    return await fetchChannelAvatar(videoId);
+  } catch {
+    return null;
+  }
+}
+
 /** Cached per query for a few hours so repeated searches don't spend quota. Throws on API errors (not cached). */
 export async function searchSongs(query: string): Promise<SongResult[]> {
   "use cache";

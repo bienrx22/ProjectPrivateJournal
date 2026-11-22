@@ -35,6 +35,8 @@ export type ViewerTrack = {
   source: "upload" | "youtube";
   audioUrl: string | null; // signed URL, uploads only
   youtubeVideoId: string | null;
+  /** YouTube channel profile photo, when known. */
+  artworkUrl: string | null;
   title: string;
   artist: string | null;
   startMs: number;
@@ -53,6 +55,7 @@ export function toViewerTrack(t: TrackRow, audioUrl: string | null): ViewerTrack
     source: t.source as ViewerTrack["source"],
     audioUrl,
     youtubeVideoId: t.youtube_video_id,
+    artworkUrl: t.artwork_url,
     title: t.title,
     artist: t.artist,
     startMs: t.start_ms,
