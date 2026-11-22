@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ImageIcon, MapPin, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -8,7 +9,35 @@ import { deleteEntry } from "@/app/(main)/journal/actions";
 import { createClient } from "@/lib/supabase/server";
 import { UUID_RE, formatEntryDate } from "@/lib/journal";
 
-export default async function EntryPage({ params }: { params: Promise<{ id: string }> }) {
+type Params = Promise<{ id: string }>;
+
+export default function EntryPage({ params }: { params: Params }) {
+  return (
+    <article className="mx-auto max-w-3xl">
+      <Link
+        href="/dashboard"
+        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+      >
+        <ArrowLeft className="h-4 w-4" /> Memories
+      </Link>
+      <Suspense fallback={<EntrySkeleton />}>
+        <EntryDetail params={params} />
+      </Suspense>
+    </article>
+  );
+}
+
+function EntrySkeleton() {
+  return (
+    <div className="mt-6 flex animate-pulse flex-col gap-4" aria-busy="true">
+      <div className="h-4 w-40 rounded bg-muted" />
+      <div className="h-12 w-3/4 rounded bg-muted" />
+      <div className="h-24 rounded bg-muted/60" />
+    </div>
+  );
+}
+
+async function EntryDetail({ params }: { params: Params }) {
   const { id } = await params;
   if (!UUID_RE.test(id)) notFound();
 
@@ -22,14 +51,7 @@ export default async function EntryPage({ params }: { params: Promise<{ id: stri
   if (!entry) notFound();
 
   return (
-    <article className="mx-auto max-w-3xl">
-      <Link
-        href="/journal"
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="h-4 w-4" /> All memories
-      </Link>
-
+    <>
       <header className="mt-6 flex flex-col gap-3">
         <div className="flex flex-wrap items-center gap-3 text-sm uppercase tracking-wide text-muted-foreground">
           <time dateTime={entry.entry_date}>{formatEntryDate(entry.entry_date)}</time>
@@ -68,6 +90,6 @@ export default async function EntryPage({ params }: { params: Promise<{ id: stri
         <ImageIcon className="h-6 w-6" />
         Photos and videos for this memory will appear here.
       </div>
-    </article>
+    </>
   );
 }

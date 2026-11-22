@@ -39,6 +39,16 @@ export function EntryCard({ entry, index }: { entry: Entry; index: number }) {
   );
 }
 
+export function EntryGridSkeleton() {
+  return (
+    <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3" aria-busy="true" aria-label="Loading memories">
+      {Array.from({ length: 3 }, (_, i) => (
+        <div key={i} className="h-44 animate-pulse rounded-xl border bg-muted/60" />
+      ))}
+    </div>
+  );
+}
+
 export function EntryGrid({ entries }: { entries: Entry[] }) {
   return (
     <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">

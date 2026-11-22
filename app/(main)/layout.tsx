@@ -5,8 +5,6 @@ import { createClient } from "@/lib/supabase/server";
 import { LogoutButton } from "@/components/logout-button";
 
 const nav = [
-  { href: "/dashboard", label: "Home" },
-  { href: "/journal", label: "All Memories" },
   { href: "/favorites", label: "Favorites" },
   { href: "/calendar", label: "Calendar" },
   { href: "/settings", label: "Settings" },

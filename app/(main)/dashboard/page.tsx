@@ -1,23 +1,16 @@
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Suspense } from "react";
+import { Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { EntryGrid } from "@/components/journal/entry-card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { EntryGrid, EntryGridSkeleton } from "@/components/journal/entry-card";
 import { createClient } from "@/lib/supabase/server";
+import { DATE_RE } from "@/lib/journal";
 
-const RECENT_LIMIT = 9;
+type SearchParams = Promise<{ q?: string; from?: string; to?: string }>;
 
-export default async function DashboardPage() {
-  const supabase = await createClient();
-  const { data: entries, error } = await supabase
-    .from("journal_entries")
-    .select("*")
-    .order("entry_date", { ascending: false })
-    .order("created_at", { ascending: false })
-    .limit(RECENT_LIMIT + 1);
-
-  if (error) throw new Error(error.message);
-  const hasMore = entries.length > RECENT_LIMIT;
-
+export default function DashboardPage({ searchParams }: { searchParams: SearchParams }) {
   return (
     <section>
       <div className="flex items-end justify-between gap-4">
@@ -29,23 +22,93 @@ export default async function DashboardPage() {
         </Button>
       </div>
 
-      {entries.length === 0 ? (
-        <div className="mt-24 flex flex-col items-center gap-4 text-center">
-          <p className="text-muted-foreground">No memories yet.</p>
-          <Button asChild variant="outline">
-            <Link href="/journal/new">Write your first memory</Link>
-          </Button>
-        </div>
-      ) : (
-        <div className="mt-8 flex flex-col gap-6">
-          <EntryGrid entries={entries.slice(0, RECENT_LIMIT)} />
-          {hasMore && (
-            <Link href="/journal" className="self-center text-sm text-muted-foreground underline-offset-4 hover:underline">
-              See all memories →
-            </Link>
-          )}
-        </div>
-      )}
+      <Suspense fallback={<div className="mt-8"><EntryGridSkeleton /></div>}>
+        <MemoryList searchParams={searchParams} />
+      </Suspense>
     </section>
+  );
+}
+
+async function MemoryList({ searchParams }: { searchParams: SearchParams }) {
+  const params = await searchParams;
+  const q = (params.q ?? "").trim();
+  const from = DATE_RE.test(params.from ?? "") ? params.from! : "";
+  const to = DATE_RE.test(params.to ?? "") ? params.to! : "";
+  const filtering = Boolean(q || from || to);
+
+  const supabase = await createClient();
+  let query = supabase
+    .from("journal_entries")
+    .select("*")
+    .order("entry_date", { ascending: false })
+    .order("created_at", { ascending: false });
+
+  if (q) {
+    // Strip characters that have meaning in PostgREST filters / LIKE patterns.
+    const term = q.replace(/[,()"\\%_*]/g, " ").trim();
+    if (term) {
+      query = query.or(
+        `title.ilike.%${term}%,body.ilike.%${term}%,location.ilike.%${term}%,mood.ilike.%${term}%`,
+      );
+    }
+  }
+  if (from) query = query.gte("entry_date", from);
+  if (to) query = query.lte("entry_date", to);
+
+  const { data: entries, error } = await query;
+  if (error) throw new Error(error.message);
+
+  // Brand-new journal: skip the search bar and invite the first memory.
+  if (!filtering && entries.length === 0) {
+    return (
+      <div className="mt-24 flex flex-col items-center gap-4 text-center">
+        <p className="text-muted-foreground">No memories yet.</p>
+        <Button asChild variant="outline">
+          <Link href="/journal/new">Write your first memory</Link>
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <form method="get" className="mt-8 flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4">
+        <div className="grid min-w-[12rem] flex-1 gap-1.5">
+          <Label htmlFor="q">Search</Label>
+          <Input id="q" name="q" defaultValue={q} placeholder="Title, place, mood, words…" />
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="from">From</Label>
+          <Input id="from" name="from" type="date" defaultValue={from} />
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="to">To</Label>
+          <Input id="to" name="to" type="date" defaultValue={to} />
+        </div>
+        <Button type="submit" variant="secondary">
+          <Search /> Search
+        </Button>
+        {filtering && (
+          <Button asChild variant="ghost">
+            <Link href="/dashboard">Clear</Link>
+          </Button>
+        )}
+      </form>
+
+      <div className="mt-8">
+        {entries.length === 0 ? (
+          <p className="mt-16 text-center text-muted-foreground">No memories match your search.</p>
+        ) : (
+          <>
+            {filtering && (
+              <p className="mb-4 text-sm text-muted-foreground">
+                {entries.length} {entries.length === 1 ? "memory" : "memories"} found
+              </p>
+            )}
+            <EntryGrid entries={entries} />
+          </>
+        )}
+      </div>
+    </>
   );
 }

@@ -1,10 +1,24 @@
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { EntryForm } from "@/components/journal/entry-form";
 import { updateEntry } from "@/app/(main)/journal/actions";
 import { createClient } from "@/lib/supabase/server";
 import { UUID_RE } from "@/lib/journal";
 
-export default async function EditEntryPage({ params }: { params: Promise<{ id: string }> }) {
+type Params = Promise<{ id: string }>;
+
+export default function EditEntryPage({ params }: { params: Params }) {
+  return (
+    <section>
+      <h1 className="mb-8 font-serif text-4xl">Edit Memory</h1>
+      <Suspense fallback={<div className="h-96 max-w-2xl animate-pulse rounded-xl bg-muted/60" />}>
+        <EditForm params={params} />
+      </Suspense>
+    </section>
+  );
+}
+
+async function EditForm({ params }: { params: Params }) {
   const { id } = await params;
   if (!UUID_RE.test(id)) notFound();
 
@@ -18,14 +32,11 @@ export default async function EditEntryPage({ params }: { params: Promise<{ id: 
   if (!entry) notFound();
 
   return (
-    <section>
-      <h1 className="mb-8 font-serif text-4xl">Edit Memory</h1>
-      <EntryForm
-        action={updateEntry.bind(null, entry.id)}
-        entry={entry}
-        submitLabel="Save changes"
-        cancelHref={`/journal/${entry.id}`}
-      />
-    </section>
+    <EntryForm
+      action={updateEntry.bind(null, entry.id)}
+      entry={entry}
+      submitLabel="Save changes"
+      cancelHref={`/journal/${entry.id}`}
+    />
   );
 }
