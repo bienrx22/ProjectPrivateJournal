@@ -1,14 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, MapPin, X } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
-import type { MediaItem } from "@/lib/media";
+import { MusicPanel } from "@/components/journal/music-panel";
+import type { MediaCaption, MediaItem } from "@/lib/media";
 
 const navClass =
   "flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-white transition hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-butter disabled:opacity-30";
 
-function VideoPlayer({ url }: { url: string }) {
+function VideoPlayer({ url, withMusic }: { url: string; withMusic: boolean }) {
   const [failed, setFailed] = useState(false);
   if (failed) {
     return (
@@ -21,7 +22,10 @@ function VideoPlayer({ url }: { url: string }) {
   return (
     <video
       src={url}
-      controls
+      // With a song attached, the video's own sound is muted and it loops like a moving photo.
+      controls={!withMusic}
+      muted={withMusic}
+      loop={withMusic}
       autoPlay
       playsInline
       onError={() => setFailed(true)}
@@ -33,11 +37,13 @@ function VideoPlayer({ url }: { url: string }) {
 export function MediaLightbox({
   items,
   index,
+  caption,
   onIndexChange,
   onClose,
 }: {
   items: MediaItem[];
   index: number | null;
+  caption: MediaCaption;
   onIndexChange: (index: number) => void;
   onClose: () => void;
 }) {
@@ -56,41 +62,68 @@ export function MediaLightbox({
         if (e.key === "ArrowRight" && hasNext) onIndexChange(index + 1);
       }}
       // The viewer stays black regardless of theme.
-      className="m-0 h-dvh max-h-none w-screen max-w-none rounded-none border-0 bg-black/95 text-white backdrop:bg-black/80"
+      className="m-0 h-dvh max-h-none w-screen max-w-none rounded-none border-0 bg-black text-white backdrop:bg-black/80"
     >
       {item && index !== null && (
-        <div className="relative flex h-full w-full items-center justify-center p-4 sm:p-16">
-          {item.mediaType === "IMAGE" ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={item.url} alt="" className="max-h-full max-w-full rounded-lg object-contain" />
-          ) : (
-            <VideoPlayer key={item.id} url={item.url} />
-          )}
+        <div className="flex h-full w-full flex-col gap-4 overflow-y-auto p-4 lg:flex-row lg:overflow-hidden lg:p-6">
+          {/* Media side */}
+          <div className="relative flex min-h-[60dvh] flex-1 flex-col lg:min-h-0">
+            <header className="flex items-center justify-between gap-4 pb-3 text-sm text-white/70">
+              <span className="flex min-w-0 items-center gap-1.5">
+                {caption.location && (
+                  <>
+                    <MapPin className="h-4 w-4 shrink-0" />
+                    <span className="truncate">{caption.location}</span>
+                    <span className="text-white/30">·</span>
+                  </>
+                )}
+                <span className="shrink-0">{caption.date}</span>
+              </span>
+              <span className="flex shrink-0 items-center gap-3">
+                <span className="tabular-nums text-white/50">
+                  {index + 1} / {items.length}
+                </span>
+                <button type="button" aria-label="Close" onClick={onClose} className={navClass}>
+                  <X className="h-5 w-5" />
+                </button>
+              </span>
+            </header>
 
-          <button type="button" aria-label="Close" onClick={onClose} className={`${navClass} absolute right-4 top-4`}>
-            <X className="h-5 w-5" />
-          </button>
-          <button
-            type="button"
-            aria-label="Previous"
-            disabled={!hasPrev}
-            onClick={() => onIndexChange(index - 1)}
-            className={`${navClass} absolute left-4 top-1/2 -translate-y-1/2`}
-          >
-            <ChevronLeft className="h-6 w-6" />
-          </button>
-          <button
-            type="button"
-            aria-label="Next"
-            disabled={!hasNext}
-            onClick={() => onIndexChange(index + 1)}
-            className={`${navClass} absolute right-4 top-1/2 -translate-y-1/2`}
-          >
-            <ChevronRight className="h-6 w-6" />
-          </button>
-          <p className="absolute bottom-4 left-1/2 -translate-x-1/2 text-sm text-white/60">
-            {index + 1} / {items.length}
-          </p>
+            <div className="relative flex min-h-0 flex-1 items-center justify-center">
+              {item.mediaType === "IMAGE" ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={item.url} alt="" className="max-h-full max-w-full rounded-lg object-contain" />
+              ) : (
+                <VideoPlayer key={item.id} url={item.url} withMusic={item.track != null} />
+              )}
+
+              <button
+                type="button"
+                aria-label="Previous"
+                disabled={!hasPrev}
+                onClick={() => onIndexChange(index - 1)}
+                className={`${navClass} absolute left-0 top-1/2 -translate-y-1/2 sm:left-2`}
+              >
+                <ChevronLeft className="h-6 w-6" />
+              </button>
+              <button
+                type="button"
+                aria-label="Next"
+                disabled={!hasNext}
+                onClick={() => onIndexChange(index + 1)}
+                className={`${navClass} absolute right-0 top-1/2 -translate-y-1/2 sm:right-2`}
+              >
+                <ChevronRight className="h-6 w-6" />
+              </button>
+            </div>
+          </div>
+
+          {/* Music side */}
+          {item.track && (
+            <div className="flex shrink-0 justify-center lg:items-center">
+              <MusicPanel key={item.id} track={item.track} />
+            </div>
+          )}
         </div>
       )}
     </Modal>

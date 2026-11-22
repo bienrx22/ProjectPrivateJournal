@@ -6,7 +6,7 @@ import { ChevronLeft, ChevronRight, Music2, Play, Trash2 } from "lucide-react";
 import { deleteMedia, setMediaOrder } from "@/app/(main)/journal/media-actions";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { MediaLightbox } from "@/components/journal/media-lightbox";
-import type { MediaItem } from "@/lib/media";
+import type { MediaCaption, MediaItem } from "@/lib/media";
 
 const controlClass =
   "flex h-8 w-8 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur transition hover:bg-black/75 disabled:opacity-40";
@@ -14,7 +14,7 @@ const controlClass =
 /** Always visible on touch screens; on larger screens, shown on hover or keyboard focus. */
 const revealClass = "transition sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100";
 
-export function MediaGrid({ entryId, items }: { entryId: string; items: MediaItem[] }) {
+export function MediaGrid({ entryId, items, caption }: { entryId: string; items: MediaItem[]; caption: MediaCaption }) {
   const [shown, setShown] = useOptimistic(items);
   const [reordering, startReorder] = useTransition();
   const [deleting, startDelete] = useTransition();
@@ -108,10 +108,10 @@ export function MediaGrid({ entryId, items }: { entryId: string; items: MediaIte
             </div>
             <Link
               href={`/journal/${entryId}/media/${m.id}/music`}
-              aria-label={m.hasTrack ? "Edit music" : "Add music"}
-              title={m.hasTrack ? "Edit music" : "Add music"}
+              aria-label={m.track ? "Edit music" : "Add music"}
+              title={m.track ? "Edit music" : "Add music"}
               className={
-                m.hasTrack
+                m.track
                   ? "absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-full bg-butter text-foreground shadow transition hover:scale-105"
                   : `${controlClass} absolute right-2 top-2 ${revealClass}`
               }
@@ -135,6 +135,7 @@ export function MediaGrid({ entryId, items }: { entryId: string; items: MediaIte
 
       <MediaLightbox
         items={shown}
+        caption={caption}
         index={viewing}
         onIndexChange={setViewing}
         onClose={() => setViewing(null)}

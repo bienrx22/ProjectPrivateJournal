@@ -4,7 +4,8 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, MapPin, Pencil } from "lucide-react";
 import { MediaGrid } from "@/components/journal/media-grid";
 import { MediaUploader } from "@/components/journal/media-uploader";
-import { MEDIA_BUCKET, type MediaItem } from "@/lib/media";
+import { MEDIA_BUCKET, type MediaCaption, type MediaItem, type ViewerTrack } from "@/lib/media";
+import { AUDIO_BUCKET, type Track } from "@/lib/music";
 import { Button } from "@/components/ui/button";
 import { FavoriteButton } from "@/components/journal/favorite-button";
 import { DeleteEntryButton } from "@/components/journal/delete-entry-button";
@@ -91,7 +92,10 @@ async function EntryDetail({ params }: { params: Params }) {
 
       <section className="mt-10 flex flex-col gap-4" aria-label="Photos and videos">
         <Suspense fallback={<div className="h-40 animate-pulse rounded-xl bg-muted/60" />}>
-          <EntryMedia entryId={entry.id} />
+          <EntryMedia
+            entryId={entry.id}
+            caption={{ location: entry.location, date: formatEntryDate(entry.entry_date) }}
+          />
         </Suspense>
       </section>
     </>
@@ -100,37 +104,65 @@ async function EntryDetail({ params }: { params: Params }) {
 
 const SIGNED_URL_TTL_SECONDS = 60 * 60;
 
-async function EntryMedia({ entryId }: { entryId: string }) {
+async function EntryMedia({ entryId, caption }: { entryId: string; caption: MediaCaption }) {
   const supabase = await createClient();
   const { data: claims } = await supabase.auth.getClaims();
   const userId = claims?.claims.sub as string;
 
   const { data: rows, error } = await supabase
     .from("media_assets")
-    .select("id, file_path, media_type, music_tracks(id)")
+    .select("id, file_path, media_type, music_tracks(*)")
     .eq("entry_id", entryId)
     .order("sort_order")
     .order("created_at");
   if (error) throw new Error(error.message);
 
+  // The embed can come back as an object or a one-item array.
+  const trackOf = (r: (typeof rows)[number]): Track | null => {
+    const t = r.music_tracks as unknown as Track | Track[] | null;
+    return (Array.isArray(t) ? t[0] : t) ?? null;
+  };
+
   let items: MediaItem[] = [];
   if (rows.length) {
-    const { data: signed, error: signError } = await supabase.storage
-      .from(MEDIA_BUCKET)
-      .createSignedUrls(rows.map((r) => r.file_path), SIGNED_URL_TTL_SECONDS);
-    if (signError) throw new Error(signError.message);
-    const urlByPath = new Map(signed.map((s) => [s.path, s.signedUrl]));
+    const audioPaths = rows.flatMap((r) => {
+      const t = trackOf(r);
+      return t?.source === "upload" && t.storage_path ? [t.storage_path] : [];
+    });
+
+    const [mediaSigned, audioSigned] = await Promise.all([
+      supabase.storage.from(MEDIA_BUCKET).createSignedUrls(rows.map((r) => r.file_path), SIGNED_URL_TTL_SECONDS),
+      audioPaths.length
+        ? supabase.storage.from(AUDIO_BUCKET).createSignedUrls(audioPaths, SIGNED_URL_TTL_SECONDS)
+        : Promise.resolve({ data: [], error: null }),
+    ]);
+    if (mediaSigned.error) throw new Error(mediaSigned.error.message);
+    const urlByPath = new Map(mediaSigned.data.map((s) => [s.path, s.signedUrl]));
+    const audioByPath = new Map((audioSigned.data ?? []).map((s) => [s.path, s.signedUrl]));
+
     items = rows.flatMap((r) => {
       const url = urlByPath.get(r.file_path);
-      const track = r.music_tracks as unknown;
-      const hasTrack = Array.isArray(track) ? track.length > 0 : Boolean(track);
-      return url ? [{ id: r.id, url, mediaType: r.media_type as MediaItem["mediaType"], hasTrack }] : [];
+      if (!url) return [];
+      const t = trackOf(r);
+      const track: ViewerTrack | null = t
+        ? {
+            source: t.source as ViewerTrack["source"],
+            audioUrl: t.storage_path ? (audioByPath.get(t.storage_path) ?? null) : null,
+            youtubeVideoId: t.youtube_video_id,
+            title: t.title,
+            artist: t.artist,
+            startMs: t.start_ms,
+            endMs: t.end_ms,
+            volume: Number(t.volume),
+          }
+        : null;
+      return [{ id: r.id, url, mediaType: r.media_type as MediaItem["mediaType"], track }];
     });
   }
 
   return (
     <>
-      {items.length > 0 && <MediaGrid entryId={entryId} items={items} />}
+      {items.length > 0 && <MediaGrid entryId={entryId} items={items} caption={caption} />}
       <MediaUploader entryId={entryId} userId={userId} />
     </>
   );

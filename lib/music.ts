@@ -32,6 +32,13 @@ export function formatMs(ms: number | null | undefined) {
   return `${minutes}:${String(seconds).padStart(2, "0")}.${tenths}`;
 }
 
+/** 83_450 → "1:23" (for player timers) */
+export function formatClock(ms: number | null | undefined) {
+  if (ms == null || !Number.isFinite(ms) || ms < 0) return "0:00";
+  const total = Math.floor(ms / 1000);
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+}
+
 /** Accepts "1:23.4", "83.4" or "83". Returns milliseconds, or null if unreadable. */
 export function parseTime(input: string): number | null {
   const s = input.trim();

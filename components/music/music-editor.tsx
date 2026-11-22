@@ -155,18 +155,23 @@ export function MusicEditor({ entryId, mediaId, userId, track, savedAudioUrl, de
       setArtist(guess.artist);
     }
     setResults(null);
+    lastQueryRef.current = ""; // allow the same search again later
   }
 
-  /** A link loads directly; anything else searches YouTube's Music category. */
-  function searchOrLoad() {
-    changed();
-    const id = parseYouTubeId(youtubeInput);
-    if (id) {
-      pickVideo(id);
-      return;
-    }
+  /** Each search costs YouTube quota, so wait for a pause in typing and skip repeats. */
+  const SEARCH_DELAY_MS = 700;
+  const MIN_QUERY_LENGTH = 3;
+  const searchTimerRef = useRef<number | null>(null);
+  const lastQueryRef = useRef("");
+
+  function runSearch(raw: string) {
+    const q = raw.trim().replace(/\s+/g, " ").toLowerCase();
+    if (q.length < MIN_QUERY_LENGTH || q === lastQueryRef.current) return;
+    lastQueryRef.current = q;
+    setError(null);
     startSearch(async () => {
-      const res = await findSongs(youtubeInput);
+      const res = await findSongs(q);
+      if (lastQueryRef.current !== q) return; // a newer search replaced this one
       if (res.error) {
         setError(res.error);
         setResults(null);
@@ -175,6 +180,29 @@ export function MusicEditor({ entryId, mediaId, userId, track, savedAudioUrl, de
       }
     });
   }
+
+  /** A pasted link loads right away; typing searches after a short pause. */
+  function onSearchInput(value: string) {
+    setYoutubeInput(value);
+    if (searchTimerRef.current) window.clearTimeout(searchTimerRef.current);
+    const id = parseYouTubeId(value);
+    if (id) {
+      changed();
+      pickVideo(id);
+      return;
+    }
+    if (value.trim().length < MIN_QUERY_LENGTH) {
+      setResults(null);
+      return;
+    }
+    searchTimerRef.current = window.setTimeout(() => runSearch(value), SEARCH_DELAY_MS);
+  }
+
+  useEffect(() => {
+    return () => {
+      if (searchTimerRef.current) window.clearTimeout(searchTimerRef.current);
+    };
+  }, []);
 
   function save() {
     changed();
@@ -312,24 +340,27 @@ export function MusicEditor({ entryId, mediaId, userId, track, savedAudioUrl, de
         </div>
       ) : (
         <div className="flex flex-col gap-4">
-          <form
-            className="flex gap-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              searchOrLoad();
-            }}
-          >
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
+              type="search"
               value={youtubeInput}
-              onChange={(e) => setYoutubeInput(e.target.value)}
+              onChange={(e) => onSearchInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  if (searchTimerRef.current) window.clearTimeout(searchTimerRef.current);
+                  runSearch(youtubeInput); // search now instead of waiting
+                }
+              }}
               placeholder="Search a song, or paste a YouTube link"
               aria-label="Search songs or paste a YouTube link"
+              className="pl-9 pr-9"
             />
-            <Button type="submit" variant="outline" disabled={searching || !youtubeInput.trim()}>
-              {searching ? <Loader2 className="animate-spin" /> : <Search />}
-              {parseYouTubeId(youtubeInput) ? "Load" : "Search"}
-            </Button>
-          </form>
+            {searching && (
+              <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+            )}
+          </div>
 
           {results && (
             <div className="rounded-lg border">

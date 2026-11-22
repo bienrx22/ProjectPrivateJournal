@@ -24,5 +24,20 @@ export type MediaItem = {
   id: string;
   url: string;
   mediaType: MediaType;
-  hasTrack: boolean;
+  track: ViewerTrack | null;
 };
+
+/** What the viewer needs to play a media item's song. */
+export type ViewerTrack = {
+  source: "upload" | "youtube";
+  audioUrl: string | null; // signed URL, uploads only
+  youtubeVideoId: string | null;
+  title: string;
+  artist: string | null;
+  startMs: number;
+  endMs: number | null;
+  volume: number;
+};
+
+/** Shown at the top of the viewer. */
+export type MediaCaption = { location: string | null; date: string };
