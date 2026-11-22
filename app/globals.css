@@ -62,6 +62,16 @@
   }
 }
 
+/* Track artwork turning like a record (viewer). Pause with animation-play-state. */
+@keyframes record-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.record-spin {
+  animation: record-spin 6s linear infinite;
+}
+
 @layer base {
   * {
     @apply border-border;

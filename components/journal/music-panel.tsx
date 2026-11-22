@@ -19,7 +19,7 @@ function TrackArtwork({ url, playing }: { url: string | null; playing: boolean }
         referrerPolicy="no-referrer"
         onError={() => setFailed(true)}
         // Spins like a record while playing; pausing freezes it at its current angle.
-        className="h-11 w-11 shrink-0 animate-[spin_6s_linear_infinite] rounded-full object-cover ring-2 ring-butter/70 motion-reduce:animate-none"
+        className="record-spin h-11 w-11 shrink-0 rounded-full object-cover ring-2 ring-butter/70"
         style={{ animationPlayState: playing ? "running" : "paused" }}
       />
     );
