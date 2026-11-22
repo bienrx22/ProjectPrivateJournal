@@ -1,15 +1,14 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { Plus, Search } from "lucide-react";
+import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { EntryGrid, EntryGridSkeleton } from "@/components/journal/entry-card";
 import { createClient } from "@/lib/supabase/server";
 import { ENTRY_WITH_MEDIA_SELECT, withCovers } from "@/lib/entries";
-import { DATE_RE } from "@/lib/journal";
+import { DATE_RE, formatEntryDate } from "@/lib/journal";
 
-type SearchParams = Promise<{ q?: string; from?: string; to?: string }>;
+/** from/to come from the calendar's "+N more" links (one day). */
+type SearchParams = Promise<{ from?: string; to?: string }>;
 
 export default function DashboardPage({ searchParams }: { searchParams: SearchParams }) {
   return (
@@ -30,12 +29,18 @@ export default function DashboardPage({ searchParams }: { searchParams: SearchPa
   );
 }
 
+function rangeLabel(from: string, to: string) {
+  if (from && from === to) return `on ${formatEntryDate(from)}`;
+  if (from && to) return `from ${formatEntryDate(from)} to ${formatEntryDate(to)}`;
+  if (from) return `since ${formatEntryDate(from)}`;
+  return `until ${formatEntryDate(to)}`;
+}
+
 async function MemoryList({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
-  const q = (params.q ?? "").trim();
   const from = DATE_RE.test(params.from ?? "") ? params.from! : "";
   const to = DATE_RE.test(params.to ?? "") ? params.to! : "";
-  const filtering = Boolean(q || from || to);
+  const filtering = Boolean(from || to);
 
   const supabase = await createClient();
   let query = supabase
@@ -43,16 +48,6 @@ async function MemoryList({ searchParams }: { searchParams: SearchParams }) {
     .select(ENTRY_WITH_MEDIA_SELECT)
     .order("entry_date", { ascending: false })
     .order("created_at", { ascending: false });
-
-  if (q) {
-    // Strip characters that have meaning in PostgREST filters / LIKE patterns.
-    const term = q.replace(/[,()"\\%_*]/g, " ").trim();
-    if (term) {
-      query = query.or(
-        `title.ilike.%${term}%,body.ilike.%${term}%,location.ilike.%${term}%,mood.ilike.%${term}%`,
-      );
-    }
-  }
   if (from) query = query.gte("entry_date", from);
   if (to) query = query.lte("entry_date", to);
 
@@ -60,7 +55,6 @@ async function MemoryList({ searchParams }: { searchParams: SearchParams }) {
   if (error) throw new Error(error.message);
   const entries = await withCovers(supabase, data);
 
-  // Brand-new journal: skip the search bar and invite the first memory.
   if (!filtering && entries.length === 0) {
     return (
       <div className="mt-24 flex flex-col items-center gap-4 text-center">
@@ -73,44 +67,20 @@ async function MemoryList({ searchParams }: { searchParams: SearchParams }) {
   }
 
   return (
-    <>
-      <form method="get" className="mt-8 flex flex-wrap items-end gap-3 rounded-xl border bg-card p-4">
-        <div className="grid min-w-[12rem] flex-1 gap-1.5">
-          <Label htmlFor="q">Search</Label>
-          <Input id="q" name="q" defaultValue={q} placeholder="Title, place, mood, words…" />
-        </div>
-        <div className="grid gap-1.5">
-          <Label htmlFor="from">From</Label>
-          <Input id="from" name="from" type="date" defaultValue={from} />
-        </div>
-        <div className="grid gap-1.5">
-          <Label htmlFor="to">To</Label>
-          <Input id="to" name="to" type="date" defaultValue={to} />
-        </div>
-        <Button type="submit" variant="secondary">
-          <Search /> Search
-        </Button>
-        {filtering && (
-          <Button asChild variant="ghost">
-            <Link href="/dashboard">Clear</Link>
-          </Button>
-        )}
-      </form>
-
-      <div className="mt-8">
-        {entries.length === 0 ? (
-          <p className="mt-16 text-center text-muted-foreground">No memories match your search.</p>
-        ) : (
-          <>
-            {filtering && (
-              <p className="mb-4 text-sm text-muted-foreground">
-                {entries.length} {entries.length === 1 ? "memory" : "memories"} found
-              </p>
-            )}
-            <EntryGrid entries={entries} />
-          </>
-        )}
-      </div>
-    </>
+    <div className="mt-8">
+      {filtering && (
+        <p className="mb-4 text-sm text-muted-foreground">
+          {entries.length} {entries.length === 1 ? "memory" : "memories"} {rangeLabel(from, to)} ·{" "}
+          <Link href="/dashboard" className="text-foreground underline-offset-4 hover:underline">
+            Show all
+          </Link>
+        </p>
+      )}
+      {entries.length === 0 ? (
+        <p className="mt-16 text-center text-muted-foreground">No memories on these dates.</p>
+      ) : (
+        <EntryGrid entries={entries} />
+      )}
+    </div>
   );
 }
