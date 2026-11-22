@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { EntryGrid, EntryGridSkeleton } from "@/components/journal/entry-card";
 import { createClient } from "@/lib/supabase/server";
+import { ENTRY_WITH_MEDIA_SELECT, withCovers } from "@/lib/entries";
 import { DATE_RE } from "@/lib/journal";
 
 type SearchParams = Promise<{ q?: string; from?: string; to?: string }>;
@@ -39,7 +40,7 @@ async function MemoryList({ searchParams }: { searchParams: SearchParams }) {
   const supabase = await createClient();
   let query = supabase
     .from("journal_entries")
-    .select("*")
+    .select(ENTRY_WITH_MEDIA_SELECT)
     .order("entry_date", { ascending: false })
     .order("created_at", { ascending: false });
 
@@ -55,8 +56,9 @@ async function MemoryList({ searchParams }: { searchParams: SearchParams }) {
   if (from) query = query.gte("entry_date", from);
   if (to) query = query.lte("entry_date", to);
 
-  const { data: entries, error } = await query;
+  const { data, error } = await query;
   if (error) throw new Error(error.message);
+  const entries = await withCovers(supabase, data);
 
   // Brand-new journal: skip the search bar and invite the first memory.
   if (!filtering && entries.length === 0) {

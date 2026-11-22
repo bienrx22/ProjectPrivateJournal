@@ -14,6 +14,8 @@ type Props = {
   entry?: Entry;
   submitLabel: string;
   cancelHref: string;
+  /** Prefilled date for new memories (e.g. from the calendar). */
+  defaultDate?: string;
 };
 
 function todayLocal() {
@@ -22,7 +24,7 @@ function todayLocal() {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-export function EntryForm({ action, entry, submitLabel, cancelHref }: Props) {
+export function EntryForm({ action, entry, submitLabel, cancelHref, defaultDate }: Props) {
   const [state, formAction] = useActionState(action, {});
   const dateRef = useRef<HTMLInputElement>(null);
 
@@ -58,7 +60,7 @@ export function EntryForm({ action, entry, submitLabel, cancelHref }: Props) {
             name="entry_date"
             type="date"
             required
-            defaultValue={v("entry_date")}
+            defaultValue={v("entry_date") || defaultDate || ""}
           />
         </div>
         <div className="grid gap-2">
