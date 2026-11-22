@@ -1,14 +1,11 @@
 import Link from "next/link";
+import Image from "next/image";
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { LogoutButton } from "@/components/logout-button";
-
-const nav = [
-  { href: "/favorites", label: "Favorites" },
-  { href: "/calendar", label: "Calendar" },
-  { href: "/settings", label: "Settings" },
-];
+import { NavIconLinks, NavIcons } from "@/components/nav-icons";
+import sunflower from "@/app/icon.png";
 
 async function AuthGate({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
@@ -21,16 +18,18 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b border-border">
-        <nav className="mx-auto flex max-w-6xl items-center gap-6 px-6 py-4 text-sm">
-          <Link href="/dashboard" className="font-serif text-xl">Memories</Link>
-          <div className="flex flex-1 gap-5 overflow-x-auto text-muted-foreground">
-            {nav.map((i) => (
-              <Link key={i.href} href={i.href} className="whitespace-nowrap transition-colors hover:text-foreground">
-                {i.label}
-              </Link>
-            ))}
+        <nav className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-3">
+          <Link href="/dashboard" className="flex items-center gap-2 font-serif text-xl">
+            <Image src={sunflower} alt="" width={28} height={28} priority />
+            Memories
+          </Link>
+          <div className="flex items-center gap-1">
+            <Suspense fallback={<NavIconLinks pathname="" />}>
+              <NavIcons />
+            </Suspense>
+            <span className="mx-1 h-5 w-px bg-border" aria-hidden />
+            <LogoutButton />
           </div>
-          <LogoutButton />
         </nav>
       </header>
       <main className="mx-auto max-w-6xl px-6 py-10">
