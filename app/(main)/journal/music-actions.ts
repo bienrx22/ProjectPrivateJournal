@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { UUID_RE } from "@/lib/journal";
 import { AUDIO_BUCKET } from "@/lib/music";
 import { YOUTUBE_ID_RE } from "@/lib/youtube";
+import { searchSongs, youTubeSearchConfigured, type SongResult } from "@/lib/youtube-search";
 
 export type MusicActionResult = { error?: string };
 
@@ -93,6 +94,27 @@ export async function saveTrack(mediaId: string, input: TrackInput): Promise<Mus
 
   revalidatePath(`/journal/${media.entry_id}`, "layout");
   return {};
+}
+
+export async function findSongs(
+  query: string,
+): Promise<{ results?: SongResult[]; error?: string }> {
+  await authed();
+  if (!youTubeSearchConfigured()) {
+    return { error: "Song search isn't set up yet: add YOUTUBE_API_KEY to .env.local. You can still paste a YouTube link." };
+  }
+  const q = query.trim().replace(/\s+/g, " ");
+  if (q.length < 2 || q.length > 100) return { error: "Type 2–100 characters to search." };
+
+  try {
+    return { results: await searchSongs(q.toLowerCase()) };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Search failed.";
+    if (/quota/i.test(message)) {
+      return { error: "Today's YouTube search limit is used up. It resets at midnight Pacific time — paste a link instead for now." };
+    }
+    return { error: message };
+  }
 }
 
 export async function deleteTrack(mediaId: string): Promise<MusicActionResult> {

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
-import { CheckCircle2, Music, Trash2, Upload, Volume2, Youtube } from "lucide-react";
+import { CheckCircle2, Loader2, Music, Search, Trash2, Upload, Volume2, Youtube } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,7 +10,8 @@ import { ConfirmDialog } from "@/components/confirm-dialog";
 import { AudioSegmentEditor } from "@/components/music/audio-segment-editor";
 import { YouTubeSegmentEditor } from "@/components/music/youtube-segment-editor";
 import { createClient } from "@/lib/supabase/client";
-import { deleteTrack, saveTrack } from "@/app/(main)/journal/music-actions";
+import { deleteTrack, findSongs, saveTrack } from "@/app/(main)/journal/music-actions";
+import type { SongResult } from "@/lib/youtube-search";
 import {
   AUDIO_BUCKET,
   AUDIO_TYPES,
@@ -35,14 +36,14 @@ type Props = {
   defaultLengthMs: number;
 };
 
-/** "Artist - Song (Official Video)" → { artist, title }, tidied up. */
+/** "Artist - Song (Official Video)" â†’ { artist, title }, tidied up. */
 function splitYouTubeTitle(raw: string, author?: string) {
   const clean = (s: string) =>
     s
       .replace(/\s*[([](official|lyric|lyrics|audio|video|music video|mv|hd|4k|visualizer)[^)\]]*[)\]]/gi, "")
       .replace(/\s+/g, " ")
       .trim();
-  const parts = raw.split(/\s[-–—]\s/);
+  const parts = raw.split(/\s[-â€“â€”]\s/);
   if (parts.length >= 2) return { artist: clean(parts[0]), title: clean(parts.slice(1).join(" - ")) };
   return {
     artist: (author ?? "").replace(/\s*-\s*Topic$/i, "").replace(/VEVO$/i, "").trim(),
@@ -90,6 +91,8 @@ export function MusicEditor({ entryId, mediaId, userId, track, savedAudioUrl, de
     track?.youtube_video_id ? `https://youtu.be/${track.youtube_video_id}` : "",
   );
   const [videoId, setVideoId] = useState<string | null>(track?.youtube_video_id ?? null);
+  const [results, setResults] = useState<SongResult[] | null>(null);
+  const [searching, startSearch] = useTransition();
 
   // Shared
   const [title, setTitle] = useState(track?.title ?? "");
@@ -142,17 +145,35 @@ export function MusicEditor({ entryId, mediaId, userId, track, savedAudioUrl, de
     if (!title.trim()) setTitle(titleFromFileName(f.name));
   }
 
-  function loadYouTube() {
-    changed();
-    const id = parseYouTubeId(youtubeInput);
-    if (!id) {
-      setError("That doesn't look like a YouTube link.");
-      return;
-    }
+  function pickVideo(id: string, guess?: { title: string; artist: string }) {
     if (id !== videoId) {
       setVideoId(id);
       setSegment(0, null);
     }
+    if (guess) {
+      setTitle(guess.title);
+      setArtist(guess.artist);
+    }
+    setResults(null);
+  }
+
+  /** A link loads directly; anything else searches YouTube's Music category. */
+  function searchOrLoad() {
+    changed();
+    const id = parseYouTubeId(youtubeInput);
+    if (id) {
+      pickVideo(id);
+      return;
+    }
+    startSearch(async () => {
+      const res = await findSongs(youtubeInput);
+      if (res.error) {
+        setError(res.error);
+        setResults(null);
+      } else {
+        setResults(res.results ?? []);
+      }
+    });
   }
 
   function save() {
@@ -263,7 +284,7 @@ export function MusicEditor({ entryId, mediaId, userId, track, savedAudioUrl, de
               <Music /> {audioUrl ? "Choose a different file" : "Choose audio file"}
             </Button>
             <span className="truncate text-sm text-muted-foreground">
-              {file ? file.name : savedUploadPath ? "Saved audio file" : "MP3, M4A, WAV, OGG, FLAC · up to 50 MB"}
+              {file ? file.name : savedUploadPath ? "Saved audio file" : "MP3, M4A, WAV, OGG, FLAC Â· up to 50 MB"}
             </span>
             <input
               ref={fileInputRef}
@@ -295,19 +316,58 @@ export function MusicEditor({ entryId, mediaId, userId, track, savedAudioUrl, de
             className="flex gap-2"
             onSubmit={(e) => {
               e.preventDefault();
-              loadYouTube();
+              searchOrLoad();
             }}
           >
             <Input
               value={youtubeInput}
               onChange={(e) => setYoutubeInput(e.target.value)}
-              placeholder="https://www.youtube.com/watch?v=…"
-              aria-label="YouTube link"
+              placeholder="Search a song, or paste a YouTube link"
+              aria-label="Search songs or paste a YouTube link"
             />
-            <Button type="submit" variant="outline">
-              Load
+            <Button type="submit" variant="outline" disabled={searching || !youtubeInput.trim()}>
+              {searching ? <Loader2 className="animate-spin" /> : <Search />}
+              {parseYouTubeId(youtubeInput) ? "Load" : "Search"}
             </Button>
           </form>
+
+          {results && (
+            <div className="rounded-lg border">
+              {results.length === 0 ? (
+                <p className="p-4 text-sm text-muted-foreground">No songs found. Try the artist and title together.</p>
+              ) : (
+                <ul className="max-h-80 divide-y overflow-y-auto" aria-label="Search results">
+                  {results.map((r) => (
+                    <li key={r.videoId}>
+                      <button
+                        type="button"
+                        onClick={() => pickVideo(r.videoId, splitYouTubeTitle(r.title, r.channel))}
+                        className={cn(
+                          "flex w-full items-center gap-3 p-2 text-left transition hover:bg-muted focus-visible:bg-muted focus-visible:outline-none",
+                          r.videoId === videoId && "bg-butter/40",
+                        )}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={r.thumbnail} alt="" className="h-12 w-20 shrink-0 rounded object-cover" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-medium">{r.title}</span>
+                          <span className="block truncate text-xs text-muted-foreground">{r.channel}</span>
+                        </span>
+                        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                          {r.durationMs != null ? formatMs(r.durationMs).replace(/\.\d$/, "") : ""}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className="flex justify-end border-t p-1">
+                <Button type="button" variant="ghost" size="sm" onClick={() => setResults(null)}>
+                  Close results
+                </Button>
+              </div>
+            </div>
+          )}
           {videoId && (
             <YouTubeSegmentEditor
               key={videoId}
@@ -370,7 +430,7 @@ export function MusicEditor({ entryId, mediaId, userId, track, savedAudioUrl, de
             }}
           />
           <p className="pb-2 text-sm text-muted-foreground">
-            Length {endMs != null ? formatMs(endMs - startMs) : "–"}
+            Length {endMs != null ? formatMs(endMs - startMs) : "â€“"}
           </p>
           <div className="grid min-w-[12rem] flex-1 gap-1.5">
             <Label htmlFor="volume" className="flex items-center gap-1.5">
@@ -401,7 +461,7 @@ export function MusicEditor({ entryId, mediaId, userId, track, savedAudioUrl, de
 
       <div className="flex flex-wrap items-center gap-3 border-t pt-6">
         <Button type="button" onClick={save} disabled={saving || !hasAudio}>
-          {saving ? "Saving…" : "Save music"}
+          {saving ? "Savingâ€¦" : "Save music"}
         </Button>
         <Button asChild variant="ghost">
           <Link href={`/journal/${entryId}`}>Back to memory</Link>
@@ -431,7 +491,7 @@ export function MusicEditor({ entryId, mediaId, userId, track, savedAudioUrl, de
         title="Remove the music?"
         description="This photo or video will no longer play a song. Any uploaded audio file and its lyrics will be deleted."
         confirmLabel="Remove music"
-        pendingLabel="Removing…"
+        pendingLabel="Removingâ€¦"
         pending={deleting}
         error={deleteError}
         onCancel={() => setConfirmDelete(false)}
