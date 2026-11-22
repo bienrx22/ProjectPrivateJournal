@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, MapPin, Pencil } from "lucide-react";
 import { MediaGrid } from "@/components/journal/media-grid";
 import { MediaUploader } from "@/components/journal/media-uploader";
-import { MEDIA_BUCKET, type MediaCaption, type MediaItem, type ViewerTrack } from "@/lib/media";
+import { MEDIA_BUCKET, toViewerTrack, type MediaCaption, type MediaItem } from "@/lib/media";
 import { AUDIO_BUCKET, type Track } from "@/lib/music";
 import { Button } from "@/components/ui/button";
 import { FavoriteButton } from "@/components/journal/favorite-button";
@@ -111,15 +111,16 @@ async function EntryMedia({ entryId, caption }: { entryId: string; caption: Medi
 
   const { data: rows, error } = await supabase
     .from("media_assets")
-    .select("id, file_path, media_type, music_tracks(*)")
+    .select("id, file_path, media_type, music_tracks(*, lyric_lines(text, start_ms, sort_order))")
     .eq("entry_id", entryId)
     .order("sort_order")
     .order("created_at");
   if (error) throw new Error(error.message);
 
   // The embed can come back as an object or a one-item array.
-  const trackOf = (r: (typeof rows)[number]): Track | null => {
-    const t = r.music_tracks as unknown as Track | Track[] | null;
+  type TrackWithLyrics = Track & { lyric_lines: { text: string; start_ms: number; sort_order: number }[] };
+  const trackOf = (r: (typeof rows)[number]): TrackWithLyrics | null => {
+    const t = r.music_tracks as unknown as TrackWithLyrics | TrackWithLyrics[] | null;
     return (Array.isArray(t) ? t[0] : t) ?? null;
   };
 
@@ -144,17 +145,8 @@ async function EntryMedia({ entryId, caption }: { entryId: string; caption: Medi
       const url = urlByPath.get(r.file_path);
       if (!url) return [];
       const t = trackOf(r);
-      const track: ViewerTrack | null = t
-        ? {
-            source: t.source as ViewerTrack["source"],
-            audioUrl: t.storage_path ? (audioByPath.get(t.storage_path) ?? null) : null,
-            youtubeVideoId: t.youtube_video_id,
-            title: t.title,
-            artist: t.artist,
-            startMs: t.start_ms,
-            endMs: t.end_ms,
-            volume: Number(t.volume),
-          }
+      const track = t
+        ? toViewerTrack(t, t.storage_path ? (audioByPath.get(t.storage_path) ?? null) : null)
         : null;
       return [{ id: r.id, url, mediaType: r.media_type as MediaItem["mediaType"], track }];
     });

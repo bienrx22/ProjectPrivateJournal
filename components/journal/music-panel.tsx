@@ -4,13 +4,25 @@ import { useEffect, useRef, useState } from "react";
 import { Loader2, Music2, Pause, Play } from "lucide-react";
 import { createAudioClock, createYouTubeClock, type PlaybackClock } from "@/lib/playback";
 import { formatClock } from "@/lib/music";
+import { activeLineIndex } from "@/lib/lyrics";
 import type { ViewerTrack } from "@/lib/media";
 
 /**
  * Right-hand "Music Details" panel of the viewer. Plays the track's segment on a loop.
  * Remount (key) per media item so each item starts fresh.
  */
-export function MusicPanel({ track }: { track: ViewerTrack }) {
+export function MusicPanel({
+  track,
+  onLyric,
+}: {
+  track: ViewerTrack;
+  /** Called with the current lyric line (or "") whenever it changes. */
+  onLyric?: (text: string) => void;
+}) {
+  const onLyricRef = useRef(onLyric);
+  useEffect(() => {
+    onLyricRef.current = onLyric;
+  });
   const ytHostRef = useRef<HTMLDivElement>(null);
   const clockRef = useRef<PlaybackClock | null>(null);
   const [ready, setReady] = useState(false);
@@ -55,13 +67,20 @@ export function MusicPanel({ track }: { track: ViewerTrack }) {
     }
 
     // Loop the segment; the player stays the source of truth for time.
+    let lastLyric = -2;
     const tick = () => {
       const c = clockRef.current;
       if (c) {
         const t = c.getTimeMs();
         const end = endMs ?? c.getDurationMs();
         if (end != null && t >= end - 50 && c.isPlaying()) c.seek(startMs);
-        setElapsedMs(Math.max(0, t - startMs));
+        const segmentMs = Math.max(0, t - startMs);
+        setElapsedMs(segmentMs);
+        const li = activeLineIndex(track.lyrics, segmentMs, track.lyricsOffsetMs);
+        if (li !== lastLyric) {
+          lastLyric = li;
+          onLyricRef.current?.(li >= 0 ? track.lyrics[li].text : "");
+        }
       }
       raf = requestAnimationFrame(tick);
     };
@@ -72,6 +91,7 @@ export function MusicPanel({ track }: { track: ViewerTrack }) {
       cancelAnimationFrame(raf);
       clockRef.current?.destroy();
       clockRef.current = null;
+      onLyricRef.current?.("");
     };
   }, [track]);
 

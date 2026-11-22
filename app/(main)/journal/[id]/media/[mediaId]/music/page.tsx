@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { MusicEditor } from "@/components/music/music-editor";
+import { MusicTabs } from "@/components/music/music-tabs";
 import { createClient } from "@/lib/supabase/server";
 import { UUID_RE } from "@/lib/journal";
 import { MEDIA_BUCKET } from "@/lib/media";
@@ -61,10 +62,15 @@ async function MusicPageContent({ params }: { params: Params }) {
       >
         <ArrowLeft className="h-4 w-4" /> {entry.title}
       </Link>
-      <h1 className="mt-4 font-serif text-4xl">Music</h1>
-      <p className="mt-1 text-muted-foreground">
-        Choose the song that plays with this {isVideo ? "video" : "photo"}.
-      </p>
+      <div className="mt-4 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="font-serif text-4xl">Music</h1>
+          <p className="mt-1 text-muted-foreground">
+            Choose the song that plays with this {isVideo ? "video" : "photo"}.
+          </p>
+        </div>
+        <MusicTabs entryId={id} mediaId={mediaId} active="music" hasTrack={Boolean(track)} />
+      </div>
 
       <div className="mt-8 grid gap-8 lg:grid-cols-[18rem_1fr]">
         <div className="lg:sticky lg:top-6 lg:self-start">

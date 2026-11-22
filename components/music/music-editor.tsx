@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { AudioSegmentEditor } from "@/components/music/audio-segment-editor";
 import { YouTubeSegmentEditor } from "@/components/music/youtube-segment-editor";
+import { TimeField } from "@/components/music/time-field";
 import { createClient } from "@/lib/supabase/client";
 import { deleteTrack, findSongs, saveTrack } from "@/app/(main)/journal/music-actions";
 import type { SongResult } from "@/lib/youtube-search";
@@ -18,7 +19,6 @@ import {
   MAX_AUDIO_BYTES,
   audioExtension,
   formatMs,
-  parseTime,
   titleFromFileName,
   type Track,
   type TrackSource,
@@ -36,46 +36,19 @@ type Props = {
   defaultLengthMs: number;
 };
 
-/** "Artist - Song (Official Video)" â†’ { artist, title }, tidied up. */
-function splitYouTubeTitle(raw: string, author?: string) {
+/** "Artist - Song (Official Video)" → { artist, title }, tidied up. */
+export function splitYouTubeTitle(raw: string, author?: string) {
   const clean = (s: string) =>
     s
       .replace(/\s*[([](official|lyric|lyrics|audio|video|music video|mv|hd|4k|visualizer)[^)\]]*[)\]]/gi, "")
       .replace(/\s+/g, " ")
       .trim();
-  const parts = raw.split(/\s[-â€“â€”]\s/);
+  const parts = raw.split(/\s[-–—]\s/);
   if (parts.length >= 2) return { artist: clean(parts[0]), title: clean(parts.slice(1).join(" - ")) };
   return {
     artist: (author ?? "").replace(/\s*-\s*Topic$/i, "").replace(/VEVO$/i, "").trim(),
     title: clean(raw),
   };
-}
-
-function TimeField({ id, label, valueMs, onCommit }: { id: string; label: string; valueMs: number | null; onCommit: (ms: number) => void }) {
-  return (
-    <div className="grid gap-1.5">
-      <Label htmlFor={id}>{label}</Label>
-      <Input
-        key={valueMs ?? "none"}
-        id={id}
-        inputMode="decimal"
-        defaultValue={valueMs == null ? "" : formatMs(valueMs)}
-        placeholder="0:00.0"
-        className="w-28 tabular-nums"
-        onBlur={(e) => {
-          const ms = parseTime(e.currentTarget.value);
-          if (ms == null) e.currentTarget.value = valueMs == null ? "" : formatMs(valueMs);
-          else if (ms !== valueMs) onCommit(ms);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            e.currentTarget.blur();
-          }
-        }}
-      />
-    </div>
-  );
 }
 
 export function MusicEditor({ entryId, mediaId, userId, track, savedAudioUrl, defaultLengthMs }: Props) {
@@ -312,7 +285,7 @@ export function MusicEditor({ entryId, mediaId, userId, track, savedAudioUrl, de
               <Music /> {audioUrl ? "Choose a different file" : "Choose audio file"}
             </Button>
             <span className="truncate text-sm text-muted-foreground">
-              {file ? file.name : savedUploadPath ? "Saved audio file" : "MP3, M4A, WAV, OGG, FLAC Â· up to 50 MB"}
+              {file ? file.name : savedUploadPath ? "Saved audio file" : "MP3, M4A, WAV, OGG, FLAC · up to 50 MB"}
             </span>
             <input
               ref={fileInputRef}
@@ -461,7 +434,7 @@ export function MusicEditor({ entryId, mediaId, userId, track, savedAudioUrl, de
             }}
           />
           <p className="pb-2 text-sm text-muted-foreground">
-            Length {endMs != null ? formatMs(endMs - startMs) : "â€“"}
+            Length {endMs != null ? formatMs(endMs - startMs) : "–"}
           </p>
           <div className="grid min-w-[12rem] flex-1 gap-1.5">
             <Label htmlFor="volume" className="flex items-center gap-1.5">
@@ -492,12 +465,12 @@ export function MusicEditor({ entryId, mediaId, userId, track, savedAudioUrl, de
 
       <div className="flex flex-wrap items-center gap-3 border-t pt-6">
         <Button type="button" onClick={save} disabled={saving || !hasAudio}>
-          {saving ? "Savingâ€¦" : "Save music"}
+          {saving ? "Saving…" : "Save music"}
         </Button>
         <Button asChild variant="ghost">
           <Link href={`/journal/${entryId}`}>Back to memory</Link>
         </Button>
-        {saved && (
+        {saved && !saving && (
           <span className="flex items-center gap-1.5 text-sm text-green-700">
             <CheckCircle2 className="h-4 w-4" /> Saved
           </span>
@@ -522,7 +495,7 @@ export function MusicEditor({ entryId, mediaId, userId, track, savedAudioUrl, de
         title="Remove the music?"
         description="This photo or video will no longer play a song. Any uploaded audio file and its lyrics will be deleted."
         confirmLabel="Remove music"
-        pendingLabel="Removingâ€¦"
+        pendingLabel="Removing…"
         pending={deleting}
         error={deleteError}
         onCancel={() => setConfirmDelete(false)}

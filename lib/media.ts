@@ -1,3 +1,6 @@
+import type { LyricLine } from "@/lib/lyrics";
+import type { Track } from "@/lib/music";
+
 export const MEDIA_BUCKET = "journal-media";
 
 /** Matches the bucket's 50 MB limit (Supabase free plan). */
@@ -37,7 +40,30 @@ export type ViewerTrack = {
   startMs: number;
   endMs: number | null;
   volume: number;
+  /** Segment-relative, sorted by time. */
+  lyrics: LyricLine[];
+  lyricsOffsetMs: number;
 };
+
+type TrackRow = Track & { lyric_lines?: { text: string; start_ms: number; sort_order: number }[] | null };
+
+/** DB row (+ optional embedded lyric_lines) → what the player/viewer needs. */
+export function toViewerTrack(t: TrackRow, audioUrl: string | null): ViewerTrack {
+  return {
+    source: t.source as ViewerTrack["source"],
+    audioUrl,
+    youtubeVideoId: t.youtube_video_id,
+    title: t.title,
+    artist: t.artist,
+    startMs: t.start_ms,
+    endMs: t.end_ms,
+    volume: Number(t.volume),
+    lyrics: (t.lyric_lines ?? [])
+      .map((l) => ({ text: l.text, startMs: l.start_ms }))
+      .sort((a, b) => a.startMs - b.startMs),
+    lyricsOffsetMs: t.lyrics_offset_ms,
+  };
+}
 
 /** Shown at the top of the viewer. */
 export type MediaCaption = { location: string | null; date: string };

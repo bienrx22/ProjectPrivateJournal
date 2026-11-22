@@ -48,6 +48,7 @@ export function MediaLightbox({
   onClose: () => void;
 }) {
   const item = index === null ? null : items[index];
+  const [lyric, setLyric] = useState("");
   const hasPrev = index !== null && index > 0;
   const hasNext = index !== null && index < items.length - 1;
 
@@ -97,6 +98,17 @@ export function MediaLightbox({
                 <VideoPlayer key={item.id} url={item.url} withMusic={item.track != null} />
               )}
 
+              {/* Synced lyric line, near the bottom of the media */}
+              {item.track && lyric && (
+                <p
+                  key={lyric}
+                  aria-live="polite"
+                  className="pointer-events-none absolute inset-x-6 bottom-6 mx-auto max-w-2xl animate-in fade-in slide-in-from-bottom-1 text-balance text-center font-serif text-2xl leading-snug text-white duration-300 [text-shadow:0_2px_12px_rgba(0,0,0,0.85)] sm:bottom-10 sm:text-3xl"
+                >
+                  {lyric}
+                </p>
+              )}
+
               <button
                 type="button"
                 aria-label="Previous"
@@ -121,7 +133,7 @@ export function MediaLightbox({
           {/* Music side */}
           {item.track && (
             <div className="flex shrink-0 justify-center lg:items-center">
-              <MusicPanel key={item.id} track={item.track} />
+              <MusicPanel key={item.id} track={item.track} onLyric={setLyric} />
             </div>
           )}
         </div>
