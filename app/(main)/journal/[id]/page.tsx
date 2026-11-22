@@ -78,7 +78,7 @@ async function EntryDetail({ params }: { params: Params }) {
             </Link>
           </Button>
           <div className="ml-auto">
-            <DeleteEntryButton action={deleteEntry.bind(null, entry.id)} />
+            <DeleteEntryButton action={deleteEntry.bind(null, entry.id)} title={entry.title} />
           </div>
         </div>
       </header>

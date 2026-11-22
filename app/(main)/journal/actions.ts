@@ -85,7 +85,7 @@ export async function updateEntry(
   redirect(`/journal/${id}`);
 }
 
-export async function deleteEntry(id: string) {
+export async function deleteEntry(id: string): Promise<{ error?: string }> {
   const supabase = await authedClient();
 
   // Rows cascade in the database; storage files don't, so collect their paths first.
@@ -98,7 +98,7 @@ export async function deleteEntry(id: string) {
     .filter((p): p is string => Boolean(p));
 
   const { error } = await supabase.from("journal_entries").delete().eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error) return { error: error.message };
 
   if (paths.length) await supabase.storage.from(MEDIA_BUCKET).remove(paths);
 
