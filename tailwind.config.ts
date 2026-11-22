@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss";
+import tailwindcssAnimate from "tailwindcss-animate";
 
 export default {
   darkMode: ["class"],
@@ -51,6 +52,16 @@ export default {
           "4": "hsl(var(--chart-4))",
           "5": "hsl(var(--chart-5))",
         },
+        // Palette
+        butter: "hsl(var(--butter))",
+        mercury: "hsl(var(--mercury))",
+        rose: "hsl(var(--rose))",
+        apricot: "hsl(var(--apricot))",
+        jaffa: "hsl(var(--jaffa))",
+      },
+      fontFamily: {
+        sans: ["var(--font-sans)", "sans-serif"],
+        serif: ["var(--font-serif)", "serif"],
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -59,5 +70,5 @@ export default {
       },
     },
   },
-  plugins: [require("tailwindcss-animate")],
+  plugins: [tailwindcssAnimate],
 } satisfies Config;
