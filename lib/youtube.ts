@@ -32,6 +32,9 @@ export type YTPlayer = {
   getCurrentTime(): number;
   getDuration(): number;
   setVolume(volume: number): void;
+  mute?: () => void;
+  unMute?: () => void;
+  isMuted?: () => boolean;
   getPlayerState(): number;
   getVideoData?: () => { title?: string; author?: string };
   destroy(): void;

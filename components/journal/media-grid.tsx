@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight, Music2, Play, Trash2 } from "lucide-react";
 import { deleteMedia, setMediaOrder } from "@/app/(main)/journal/media-actions";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { MediaLightbox } from "@/components/journal/media-lightbox";
+import { unlockAudio } from "@/lib/playback";
 import type { MediaCaption, MediaItem } from "@/lib/media";
 
 const controlClass =
@@ -58,7 +59,10 @@ export function MediaGrid({ entryId, items, caption }: { entryId: string; items:
           <li key={m.id} className="group relative aspect-square overflow-hidden rounded-xl bg-muted">
             <button
               type="button"
-              onClick={() => setViewing(i)}
+              onClick={() => {
+                unlockAudio(); // inside the tap, so phones allow the song to start once it loads
+                setViewing(i);
+              }}
               aria-label={m.mediaType === "IMAGE" ? `Open photo ${i + 1}` : `Play video ${i + 1}`}
               className="block h-full w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             >

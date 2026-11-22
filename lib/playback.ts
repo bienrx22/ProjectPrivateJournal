@@ -6,13 +6,17 @@ import { loadYouTubeApi, youTubeErrorMessage, type YTPlayer } from "@/lib/youtub
  * The underlying player is always the source of truth for time.
  */
 export interface PlaybackClock {
-  play(): Promise<boolean>; // false if the browser blocked autoplay
+  play(): Promise<boolean>; // false if the browser blocked playback
   pause(): void;
   seek(ms: number): void;
   getTimeMs(): number;
   getDurationMs(): number | null;
   isPlaying(): boolean;
-  setVolume(volume: number): void; // 0..1
+  setVolume(volume: number): void; // 0..1 (ignored by iOS for <audio>)
+  /** YouTube only: true while playing muted because sound was blocked. */
+  isMutedFallback?(): boolean;
+  /** YouTube only: try to turn the sound on (call from a tap). */
+  unmute?(): void;
   destroy(): void;
 }
 
@@ -22,15 +26,62 @@ export type ClockEvents = {
   onError?: (message: string) => void;
 };
 
-/** Uploaded audio → HTMLAudioElement. */
+// ---------------------------------------------------------------------------
+// Mobile autoplay: phones only allow sound that starts inside a tap. Songs load
+// after the tap, so we "unlock" ONE shared <audio> element during the tap and
+// reuse it for every uploaded song afterwards (an unlocked element stays unlocked).
+// ---------------------------------------------------------------------------
+
+/** 44-byte silent WAV. */
+const SILENT_WAV = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
+
+let sharedAudio: HTMLAudioElement | null = null;
+let unlocked = false;
+
+function getSharedAudio() {
+  if (!sharedAudio) {
+    sharedAudio = new Audio();
+    sharedAudio.preload = "auto";
+    sharedAudio.setAttribute("playsinline", "");
+  }
+  return sharedAudio;
+}
+
+/** Call synchronously inside a tap/click/key handler (e.g. opening the viewer). */
+export function unlockAudio() {
+  if (unlocked || typeof window === "undefined") return;
+  const audio = getSharedAudio();
+  if (audio.src && audio.src !== SILENT_WAV) {
+    unlocked = true; // already in use for a real song
+    return;
+  }
+  audio.src = SILENT_WAV;
+  const attempt = audio.play();
+  unlocked = true;
+  attempt
+    ?.then(() => {
+      if (audio.src === SILENT_WAV) audio.pause();
+    })
+    .catch(() => {
+      unlocked = false;
+    });
+}
+
+/** Uploaded audio → the shared HTMLAudioElement. */
 export function createAudioClock(url: string, events: ClockEvents = {}): PlaybackClock {
-  const audio = new Audio();
-  audio.preload = "auto";
+  const audio = getSharedAudio();
+  const listeners = new AbortController();
+  const on = (type: string, fn: () => void) => audio.addEventListener(type, fn, { signal: listeners.signal });
+
+  on("loadedmetadata", () => events.onReady?.());
+  on("play", () => events.onPlayingChange?.(true));
+  on("pause", () => events.onPlayingChange?.(false));
+  on("error", () => {
+    if (audio.src !== SILENT_WAV) events.onError?.("Couldn't load the audio file.");
+  });
+  audio.pause();
   audio.src = url;
-  audio.addEventListener("loadedmetadata", () => events.onReady?.());
-  audio.addEventListener("play", () => events.onPlayingChange?.(true));
-  audio.addEventListener("pause", () => events.onPlayingChange?.(false));
-  audio.addEventListener("error", () => events.onError?.("Couldn't load the audio file."));
+  audio.load();
 
   return {
     async play() {
@@ -52,7 +103,9 @@ export function createAudioClock(url: string, events: ClockEvents = {}): Playbac
       audio.volume = Math.min(1, Math.max(0, v));
     },
     destroy: () => {
+      listeners.abort();
       audio.pause();
+      // Keep the element (it stays unlocked); just drop the song.
       audio.removeAttribute("src");
       audio.load();
     },
@@ -70,7 +123,8 @@ export function createYouTubeClock(
   let ready = false;
   let destroyed = false;
   let playing = false;
-  let pendingVolume = 1;
+  let mutedFallback = false;
+  let volume = 1;
   const mount = document.createElement("div");
   host.appendChild(mount);
 
@@ -85,7 +139,7 @@ export function createYouTubeClock(
         events: {
           onReady: () => {
             ready = true;
-            player?.setVolume(Math.round(pendingVolume * 100));
+            player?.setVolume(Math.round(volume * 100));
             events.onReady?.();
           },
           onStateChange: ({ data }) => {
@@ -101,13 +155,23 @@ export function createYouTubeClock(
     })
     .catch((err: Error) => events.onError?.(err.message));
 
+  const waitForPlaying = () => new Promise((r) => setTimeout(r, 1200)).then(() => playing);
+
   return {
     async play() {
       if (!ready || !player) return false;
+      if (!mutedFallback) player.unMute?.();
       player.playVideo();
-      // YouTube gives no promise; if it isn't playing shortly after, autoplay was blocked.
-      await new Promise((r) => setTimeout(r, 1200));
-      return playing;
+      // YouTube gives no promise; if it isn't playing shortly after, sound was blocked.
+      if (await waitForPlaying()) return true;
+      // Phones (iPhone especially) block unmuted iframe playback: start muted instead,
+      // so the video, timer and lyrics run, and let the person tap to unmute.
+      if (destroyed || !player) return false;
+      mutedFallback = true;
+      player.mute?.();
+      player.playVideo();
+      await waitForPlaying();
+      return false;
     },
     pause: () => player?.pauseVideo(),
     seek: (ms) => player?.seekTo(ms / 1000, true),
@@ -118,8 +182,16 @@ export function createYouTubeClock(
     },
     isPlaying: () => playing,
     setVolume: (v) => {
-      pendingVolume = v;
+      volume = v;
       if (ready) player?.setVolume(Math.round(v * 100));
+    },
+    isMutedFallback: () => mutedFallback,
+    unmute: () => {
+      if (!player) return;
+      player.unMute?.();
+      player.setVolume(Math.round(volume * 100));
+      if (!playing) player.playVideo();
+      mutedFallback = Boolean(player.isMuted?.());
     },
     destroy: () => {
       destroyed = true;

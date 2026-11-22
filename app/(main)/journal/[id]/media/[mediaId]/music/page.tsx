@@ -74,7 +74,7 @@ async function MusicPageContent({ params }: { params: Params }) {
 
       <div className="mt-8 grid gap-8 lg:grid-cols-[18rem_1fr]">
         <div className="lg:sticky lg:top-6 lg:self-start">
-          <div className="aspect-square overflow-hidden rounded-xl bg-muted">
+          <div className="mx-auto aspect-square w-40 overflow-hidden rounded-xl bg-muted sm:w-56 lg:w-full">
             {mediaUrl?.signedUrl &&
               (isVideo ? (
                 <video src={`${mediaUrl.signedUrl}#t=0.1`} preload="metadata" muted playsInline className="h-full w-full object-cover" />
